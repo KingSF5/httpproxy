@@ -1,6 +1,6 @@
 ﻿#include "httpproxy.h"
 
-int listen_port = 8899;
+int listen_port = 8899;string server_ip;bool flag;
 
 long GetContentLength(string *m_ResponseHeader)
 {
@@ -326,6 +326,21 @@ int main(_In_ int _Argc, char **argv)
 		WSACleanup();
 		return false;
 	}
+
+
+	if(argc==1)//argc==1则为服务器，否则是客户端需要吸收ip；
+	{
+		flag=0;
+	}else if(argc==2)
+	{
+		flag=1;
+		server_ip=argv[2];
+	}else
+	{
+		return false;
+	}
+	
+	
 	_beginthread(ListenThread, 0, NULL);
 	while (true)
 	{
