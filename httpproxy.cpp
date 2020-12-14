@@ -84,7 +84,7 @@ bool AnalyzeClientRequest(string *client_request, client_request_summary *crs)
 	return true;
 }
 
-void WorkThread(void *pvoid)
+void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string 代理IP, string 代理port) flag区分客户端1与服务端0
 {
 	WORKPARAM *pWork = (WORKPARAM *)pvoid;
 	unsigned long recvstatus = 0;
@@ -126,7 +126,7 @@ void WorkThread(void *pvoid)
 	{
 		cout << "请求Range:" << crs.range << endl;
 	}
-
+	//free crs flag=1
 	SOCKET m_socket;
 	struct protoent *pv;
 	pv = getprotobyname("tcp");
@@ -136,7 +136,7 @@ void WorkThread(void *pvoid)
 		Msg("创建套接字失败!\r\n");
 		return;
 	}
-
+	//140 if flag=1时到代理ip 意思是flag=1时ip_addr=代理ip且将151行port从80->8899//140-147仅在flag=0时使用 
 	hostent *m_phostip = gethostbyname(crs.host.c_str());
 	if (m_phostip == NULL)
 	{
@@ -152,20 +152,20 @@ void WorkThread(void *pvoid)
 	destaddr.sin_addr = ip_addr;
 	if (connect(m_socket, (struct sockaddr*)&destaddr, sizeof(destaddr)) != 0)
 	{
-		//	Msg("连接到目标服务器失败!\r\n");
+		/*	Msg("连接到目标服务器失败!\r\n");*/
 		return;
 	}
 
 	long recvlength = 0;
-	string m_RequestHeader;
+	string m_RequestHeader; //160-180 仅在flag=0时使用，flag=1时 m_RequestHeader=client_request 并复用176-180
 	m_RequestHeader = m_RequestHeader + crs.type + " " + crs.url + " HTTP/1.1\r\n";
 	m_RequestHeader = m_RequestHeader + "Host: " + crs.host + "\r\n";
 	m_RequestHeader = m_RequestHeader + "Connection: keep-alive\r\n";
 	m_RequestHeader = m_RequestHeader + "User-Agent: Novasoft NetPlayer/4.0\r\n";
-	//	m_RequestHeader=m_RequestHeader+"Cache-Control: max-age=0\r\n";
+	/*	m_RequestHeader=m_RequestHeader+"Cache-Control: max-age=0\r\n";*/
 	m_RequestHeader = m_RequestHeader + "Accept: */*\r\n";
-	//	m_RequestHeader=m_RequestHeader+"Origin:  http://222.73.105.196\r\n";
-	//	m_RequestHeader=m_RequestHeader+"Cookie: saeut=61.188.187.53.1323685584721318\r\n";
+	/*	m_RequestHeader=m_RequestHeader+"Origin:  http://222.73.105.196\r\n";*/
+	/*	m_RequestHeader=m_RequestHeader+"Cookie: saeut=61.188.187.53.1323685584721318\r\n";*/
 	if (!crs.range.empty())
 	{
 		m_RequestHeader = m_RequestHeader + "Range: " + crs.range + "\r\n";
@@ -298,7 +298,7 @@ void ListenThread(void *pvoid)
 			return;
 		}
 		Msg("创建一个传输线程...\r\n");
-		//		b_Proxy=true;
+		/*		b_Proxy=true;*/
 		WORKPARAM *pWorkParam = (WORKPARAM*)malloc(sizeof(WORKPARAM));
 		pWorkParam->sckClient = sckAccept;
 		pWorkParam->client_addr = accept_addr;
@@ -333,81 +333,3 @@ int main(_In_ int _Argc, char **argv)
 	}
 
 }
-
-//void AnalyzeJumpPage(HttpMessenger *hm_cmd_receiver)
-//{
-   // if (hm_cmd_receiver->m_ResponseText.find("<html>")==0)
-   // {
-   //	 Msg("可能收到跳转页面.开始解析.\r\n");
-   //	 char jmp_host[255];
-   //	 char jmp_port[10];
-   //	 char jmp_resource[1024];
-   //	 int start_pos=-1,end_pos=-1;
-   //	 string ResponseText=hm_cmd_receiver->m_ResponseText;
-   //	 ZeroMemory(jmp_resource,1024);
-   //	 ZeroMemory(jmp_port,10);
-   //	 ZeroMemory(jmp_host,255);
-   //	 start_pos=ResponseText.find("url=http://");
-   //	 if (start_pos!=string::npos)
-   //	 {
-   //		 start_pos+=11;
-   //		 end_pos=ResponseText.find("\"",start_pos);
-   //		 ResponseText.erase(end_pos,ResponseText.length());
-   //		 end_pos=ResponseText.find(":",start_pos);
-   //		 if (end_pos!=string::npos)
-   //		 {
-   //			 //如果找到冒号表示包含端口号
-   //			 memcpy(jmp_host,ResponseText.c_str()+start_pos,end_pos-start_pos);
-   //			 start_pos=end_pos+1;
-   //			 end_pos=ResponseText.find("/",start_pos);
-   //			 if (end_pos==string::npos)
-   //			 {
-   //				 end_pos=ResponseText.length();
-   //				 memcpy(jmp_port,ResponseText.c_str()+start_pos,end_pos-start_pos);
-   //				 memcpy(jmp_resource,"/",1);
-   //			 }
-   //			 else
-   //			 {
-   //				 memcpy(jmp_port,ResponseText.c_str()+start_pos,end_pos-start_pos);
-   //				 start_pos=end_pos;
-   //				 end_pos=ResponseText.length();
-   //				 memcpy(jmp_resource,ResponseText.c_str()+start_pos,end_pos-start_pos);
-   //			 }
-   //		 }
-   //		 else
-   //		 {
-   //			 memcpy(jmp_port,"80",2);
-   //			 //查找主机地址尾部
-   //			 end_pos=ResponseText.find("/",start_pos);
-   //			 if (end_pos!=string::npos)
-   //			 {
-   //				 if (end_pos-start_pos<255)
-   //				 {
-   //					 memcpy(jmp_host,ResponseText.c_str()+start_pos,end_pos-start_pos);
-   //					 start_pos=end_pos;
-   //					 end_pos=ResponseText.length();
-   //					 memcpy(jmp_resource,ResponseText.c_str()+start_pos,end_pos-start_pos);
-   //				 }
-   //			 }
-   //			 else
-   //			 {
-   //				 //没有找到资源
-   //				 end_pos=ResponseText.length();
-   //				 memcpy(jmp_host,ResponseText.c_str()+start_pos,end_pos-start_pos);
-   //				 memcpy(jmp_resource,"/",1);
-   //			 }
-   //		 }
-   //		 Msg("跳转主机:%s\r\n跳转端口:%s\r\n跳转资源:%s\r\n",jmp_host,jmp_port,jmp_resource);
-   //		 HttpMessenger hm_jmp(jmp_host,atoi(jmp_port));
-   //		 hm_jmp.CreateConnection();
-   //		 hm_jmp.CreateAndSendRequest("GET",jmp_resource,jmp_host,0,false,0);
-   //		 AnalyzeJumpPage(&hm_jmp);
-   //		 hm_cmd_receiver->m_ResponseText.erase();
-   //		 hm_cmd_receiver->m_ResponseText=hm_jmp.m_ResponseText;
-   //	 }
-   //	 else
-   //	 {
-   //		 Msg("分析跳转页面出错\r\n");
-   //	 }
-   // }
-//}
