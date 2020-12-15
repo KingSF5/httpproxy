@@ -137,6 +137,8 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		return;
 	}
 	//140 if flag=1时到代理ip 意思是flag=1时ip_addr=代理ip且将151行port从80->8899//140-147仅在flag=0时使用
+	struct sockaddr_in destaddr;
+	struct in_addr ip_addr;
 	if(flag==true)
 	{
 		hostent *m_phostip = gethostbyname(server_ip.c_str());
@@ -145,9 +147,8 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 			Msg("所请求的域名解析失败!\r\n");
 			return;
 		}
-		struct in_addr ip_addr;
+
 		memcpy(&ip_addr, m_phostip->h_addr_list[0], 4);
-		struct sockaddr_in destaddr;
 		memset((void *)&destaddr, 0, sizeof(destaddr));
 		destaddr.sin_family = AF_INET;
 		destaddr.sin_port = htons(8899);
@@ -161,9 +162,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 			Msg("所请求的域名解析失败!\r\n");
 			return;
 		}
-		struct in_addr ip_addr;
 		memcpy(&ip_addr, m_phostip->h_addr_list[0], 4);
-		struct sockaddr_in destaddr;
 		memset((void *)&destaddr, 0, sizeof(destaddr));
 		destaddr.sin_family = AF_INET;
 		destaddr.sin_port = htons(80);
@@ -195,7 +194,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 	}
 	else
 	{
-		m_RequestHeader+=client_request
+		m_RequestHeader += client_request;
 	}
 
 	if (send(m_socket, m_RequestHeader.c_str(), m_RequestHeader.length(), 0) == SOCKET_ERROR)
@@ -299,7 +298,7 @@ void ListenThread(void *pvoid)
 	}
 
 	nErrCount = 0;
-	Msg("启动下载防封代理服务功能....\r\n代理服务器:127.0.0.1 端口:8899\r\n你可以手动对下载工具进行代理配置,以绕过视频服务器的下载限制...\r\n");
+	Msg("代理服务器:127.0.0.1 端口:8899\r\n");
 	iRet = listen(sckListen, SOMAXCONN);
 	if (iRet == SOCKET_ERROR)
 	{
@@ -334,7 +333,7 @@ void ListenThread(void *pvoid)
 }
 
 
-int main(_In_ int _Argc, char **argv)
+int main(int argc, char **argv)
 {
 	WORD wVersionRequested;
 	WSADATA wsaData;
@@ -356,10 +355,13 @@ int main(_In_ int _Argc, char **argv)
 	if(argc==1)//argc==1则为服务器，否则是客户端需要吸收ip；
 	{
 		flag=false;
+		printf("以服务器模式启动\n");
 	}else if(argc==2)
 	{
 		flag=true;
-		server_ip=argv[2];
+		server_ip=argv[1];
+		
+		cout << "以代理模式启动，代理服务器ip为：" << server_ip << endl;
 	}else
 	{
 		return false;
