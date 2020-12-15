@@ -1,4 +1,4 @@
-﻿#define _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
 #include "httpproxy.h"
 #include "plugin/sm4_impl.h"
 int listen_port = 8899;string server_ip;bool flag;
@@ -27,22 +27,7 @@ long GetContentLength(string *m_ResponseHeader)
 
 bool AnalyzeClientRequest(string *client_request, client_request_summary *crs)
 {
-	/*
-	string ** tmp;
-	tmp = &client_request;
-	if (flag == false) {
-		sm4_ctx ctx;
-		uint8_t out[10000];
-		uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
 
-		sm4_set_key(gkey, &ctx);
-		sm4_decrypt((uint8_t *)(*client_request).c_str(), out, &ctx);
-		printf("%s", out);
-
-
-		tmp += (char *)out;
-	}
-	*/
 	int startPos = -1;
 	int endPos = -1;
 	endPos = client_request->find(" ht", 0);
@@ -105,7 +90,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 {
 	WORKPARAM *pWork = (WORKPARAM *)pvoid;
 	unsigned long recvstatus = 0;
-	string client_request;
+	string client_request, tmp;
 	char temp[2049], c;
 	ZeroMemory(temp, 2049);
 	for (int header_len = 0; header_len < 2048; header_len++)
@@ -114,6 +99,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		{
 			break;
 		}
+
 		temp[header_len] = c;
 		if (temp[header_len] == '\n'&&
 			temp[header_len - 1] == '\r'&&
@@ -129,7 +115,15 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		}
 
 	}
-	client_request += temp;
+	tmp += temp;
+    sm4_ctx ctx;
+    uint8_t out[10000];
+    uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
+    
+    sm4_set_key(gkey,&ctx);
+    sm4_decrypt((uint8_t *)tmp.c_str(),out,&ctx);
+    client_request += (char *)out;
+    
 	cout << "客户端的请求内容：" << endl << client_request << endl;
 	client_request_summary crs;
 	if (!AnalyzeClientRequest(&client_request, &crs))
