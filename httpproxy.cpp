@@ -1,5 +1,6 @@
-﻿#include "httpproxy.h"
-
+﻿#define _CRT_SECURE_NO_WARNINGS
+#include "httpproxy.h"
+#include "plugin/sm4_impl.h"
 int listen_port = 8899;string server_ip;bool flag;
 
 long GetContentLength(string *m_ResponseHeader)
@@ -26,6 +27,22 @@ long GetContentLength(string *m_ResponseHeader)
 
 bool AnalyzeClientRequest(string *client_request, client_request_summary *crs)
 {
+	/*
+	string ** tmp;
+	tmp = &client_request;
+	if (flag == false) {
+		sm4_ctx ctx;
+		uint8_t out[10000];
+		uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
+
+		sm4_set_key(gkey, &ctx);
+		sm4_decrypt((uint8_t *)(*client_request).c_str(), out, &ctx);
+		printf("%s", out);
+
+
+		tmp += (char *)out;
+	}
+	*/
 	int startPos = -1;
 	int endPos = -1;
 	endPos = client_request->find(" ht", 0);
@@ -194,7 +211,16 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 	}
 	else
 	{
-		m_RequestHeader += client_request;
+		sm4_ctx ctx;
+		uint8_t out[10000];
+		uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
+		
+		sm4_set_key(gkey,&ctx);
+		sm4_encrypt((uint8_t *)client_request.c_str(),out,&ctx);
+		printf("%s", out);
+
+		
+		m_RequestHeader += (char *)out;
 	}
 
 	if (send(m_socket, m_RequestHeader.c_str(), m_RequestHeader.length(), 0) == SOCKET_ERROR)
