@@ -136,20 +136,39 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		Msg("创建套接字失败!\r\n");
 		return;
 	}
-	//140 if flag=1时到代理ip 意思是flag=1时ip_addr=代理ip且将151行port从80->8899//140-147仅在flag=0时使用 
-	hostent *m_phostip = gethostbyname(crs.host.c_str());
-	if (m_phostip == NULL)
+	//140 if flag=1时到代理ip 意思是flag=1时ip_addr=代理ip且将151行port从80->8899//140-147仅在flag=0时使用
+	if(flag==true)
 	{
-		Msg("所请求的域名解析失败!\r\n");
-		return;
+		hostent *m_phostip = gethostbyname(server_ip.c_str());
+		if (m_phostip == NULL)
+		{
+			Msg("所请求的域名解析失败!\r\n");
+			return;
+		}
+		struct in_addr ip_addr;
+		memcpy(&ip_addr, m_phostip->h_addr_list[0], 4);
+		struct sockaddr_in destaddr;
+		memset((void *)&destaddr, 0, sizeof(destaddr));
+		destaddr.sin_family = AF_INET;
+		destaddr.sin_port = htons(8899);
+		destaddr.sin_addr = ip_addr;
 	}
-	struct in_addr ip_addr;
-	memcpy(&ip_addr, m_phostip->h_addr_list[0], 4);
-	struct sockaddr_in destaddr;
-	memset((void *)&destaddr, 0, sizeof(destaddr));
-	destaddr.sin_family = AF_INET;
-	destaddr.sin_port = htons(80);
-	destaddr.sin_addr = ip_addr;
+	else
+	{
+		hostent *m_phostip = gethostbyname(crs.host.c_str());
+		if (m_phostip == NULL)
+		{
+			Msg("所请求的域名解析失败!\r\n");
+			return;
+		}
+		struct in_addr ip_addr;
+		memcpy(&ip_addr, m_phostip->h_addr_list[0], 4);
+		struct sockaddr_in destaddr;
+		memset((void *)&destaddr, 0, sizeof(destaddr));
+		destaddr.sin_family = AF_INET;
+		destaddr.sin_port = htons(80);
+		destaddr.sin_addr = ip_addr;
+	}
 	if (connect(m_socket, (struct sockaddr*)&destaddr, sizeof(destaddr)) != 0)
 	{
 		/*	Msg("连接到目标服务器失败!\r\n");*/
@@ -158,20 +177,26 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 
 	long recvlength = 0;
 	string m_RequestHeader; //160-180 仅在flag=0时使用，flag=1时 m_RequestHeader=client_request 并复用176-180
-	m_RequestHeader = m_RequestHeader + crs.type + " " + crs.url + " HTTP/1.1\r\n";
-	m_RequestHeader = m_RequestHeader + "Host: " + crs.host + "\r\n";
-	m_RequestHeader = m_RequestHeader + "Connection: keep-alive\r\n";
-	m_RequestHeader = m_RequestHeader + "User-Agent: Novasoft NetPlayer/4.0\r\n";
-	/*	m_RequestHeader=m_RequestHeader+"Cache-Control: max-age=0\r\n";*/
-	m_RequestHeader = m_RequestHeader + "Accept: */*\r\n";
-	/*	m_RequestHeader=m_RequestHeader+"Origin:  http://222.73.105.196\r\n";*/
-	/*	m_RequestHeader=m_RequestHeader+"Cookie: saeut=61.188.187.53.1323685584721318\r\n";*/
-	if (!crs.range.empty())
+	if(flag == false)
 	{
-		m_RequestHeader = m_RequestHeader + "Range: " + crs.range + "\r\n";
+		m_RequestHeader = m_RequestHeader + crs.type + " " + crs.url + " HTTP/1.1\r\n";
+		m_RequestHeader = m_RequestHeader + "Host: " + crs.host + "\r\n";
+		m_RequestHeader = m_RequestHeader + "Connection: keep-alive\r\n";
+		m_RequestHeader = m_RequestHeader + "User-Agent: Novasoft NetPlayer/4.0\r\n";
+		/*	m_RequestHeader=m_RequestHeader+"Cache-Control: max-age=0\r\n";*/
+		m_RequestHeader = m_RequestHeader + "Accept: */*\r\n";
+		/*	m_RequestHeader=m_RequestHeader+"Origin:  http://222.73.105.196\r\n";*/
+		/*	m_RequestHeader=m_RequestHeader+"Cookie: saeut=61.188.187.53.1323685584721318\r\n";*/
+		if (!crs.range.empty())
+		{
+			m_RequestHeader = m_RequestHeader + "Range: " + crs.range + "\r\n";
+		}
+		m_RequestHeader += "\r\n";
 	}
-	m_RequestHeader += "\r\n";
-
+	else
+	{
+		m_RequestHeader+=client_request
+	}
 
 	if (send(m_socket, m_RequestHeader.c_str(), m_RequestHeader.length(), 0) == SOCKET_ERROR)
 	{
@@ -330,10 +355,10 @@ int main(_In_ int _Argc, char **argv)
 
 	if(argc==1)//argc==1则为服务器，否则是客户端需要吸收ip；
 	{
-		flag=0;
+		flag=false;
 	}else if(argc==2)
 	{
-		flag=1;
+		flag=true;
 		server_ip=argv[2];
 	}else
 	{
