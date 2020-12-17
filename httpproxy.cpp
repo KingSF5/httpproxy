@@ -1,4 +1,4 @@
-#define _CRT_SECURE_NO_WARNINGS
+﻿#define _CRT_SECURE_NO_WARNINGS
 #include "httpproxy.h"
 #include "plugin/sm4_impl.h"
 int listen_port = 8899;string server_ip;bool flag;
@@ -27,7 +27,6 @@ long GetContentLength(string *m_ResponseHeader)
 
 bool AnalyzeClientRequest(string *client_request, client_request_summary *crs)
 {
-
 	int startPos = -1;
 	int endPos = -1;
 	endPos = client_request->find(" ht", 0);
@@ -90,40 +89,72 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 {
 	WORKPARAM *pWork = (WORKPARAM *)pvoid;
 	unsigned long recvstatus = 0;
-	string client_request, tmp;
+	string client_request,tmp;
 	char temp[2049], c;
 	ZeroMemory(temp, 2049);
-	for (int header_len = 0; header_len < 2048; header_len++)
-	{
-		if (recv(pWork->sckClient, &c, 1, 0) == 0)
+	if(flag == true){
+		for (int header_len = 0; header_len < 2048; header_len++)
 		{
-			break;
-		}
+			if (recv(pWork->sckClient, &c, 1, 0) == 0)
+			{
+				break;
+			}
+			temp[header_len] = c;
+			if (temp[header_len] == '\n'&&
+				temp[header_len - 1] == '\r'&&
+				temp[header_len - 2] == '\n'&&
+				temp[header_len - 3] == '\r')
+			{
+				break;
+			}
+			if (recvstatus == SOCKET_ERROR)
+			{
+				Msg("接收客户端请求头失败\r\n");
+				break;
+			}
 
-		temp[header_len] = c;
-		if (temp[header_len] == '\n'&&
-			temp[header_len - 1] == '\r'&&
-			temp[header_len - 2] == '\n'&&
-			temp[header_len - 3] == '\r')
-		{
-			break;
 		}
-		if (recvstatus == SOCKET_ERROR)
-		{
-			Msg("接收客户端请求头失败\r\n");
-			break;
-		}
-
 	}
-	tmp += temp;
-    sm4_ctx ctx;
-    uint8_t out[10000];
-    uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
-    
-    sm4_set_key(gkey,&ctx);
-    sm4_decrypt((uint8_t *)tmp.c_str(),out,&ctx);
-    client_request += (char *)out;
-    
+	else
+	{
+		if (recv(pWork->sckClient, temp, 2048, 0) == 0)
+		{
+			Msg("recv error\n");
+		}
+		for (int i = 0; i < strlen(temp)-1; i++)
+		{
+			temp[i] = temp[i] ^ 0xFF;  //解密
+		}
+		for (int header_len = 0; header_len < 2048; header_len++)
+		{
+			if (temp[header_len] == '\n'&&
+				temp[header_len - 1] == '\r'&&
+				temp[header_len - 2] == '\n'&&
+				temp[header_len - 3] == '\r')
+			{
+				break;
+			}
+			if (recvstatus == SOCKET_ERROR)
+			{
+				Msg("接收客户端请求头失败\r\n");
+				break;
+			}
+
+		}
+	}
+	/*
+	if (flag == false) {
+		tmp += temp;
+		sm4_ctx ctx;
+		uint8_t out[10000];
+		uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
+
+		sm4_set_key(gkey, &ctx);
+		sm4_decrypt((uint8_t *)tmp.c_str(), out, &ctx);
+		client_request += (char *)out;
+	}
+	*/
+	client_request += temp;
 	cout << "客户端的请求内容：" << endl << client_request << endl;
 	client_request_summary crs;
 	if (!AnalyzeClientRequest(&client_request, &crs))
@@ -204,17 +235,27 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		m_RequestHeader += "\r\n";
 	}
 	else
-	{
+	{/*
 		sm4_ctx ctx;
 		uint8_t out[10000];
 		uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
+		printf("aaaaaaaaaaaaaaaaaa\n");*/
+		for (int i = 0; i < client_request.length()-1; i++)
+		{
+			client_request[i] = client_request[i] ^ 0xFF;  //加密
+		}
+		//sm4_set_key(gkey, &ctx);
+		//sm4_encrypt((uint8_t *)client_request.c_str(), out, &ctx);
+		//for (int i = 0; i < ); i++)
+		//{
+			//printf("%d ", out[i]);
+		//}
+		cout << client_request << endl;
+		//printf("%s", out);
 		
-		sm4_set_key(gkey,&ctx);
-		sm4_encrypt((uint8_t *)client_request.c_str(),out,&ctx);
-		printf("%s", out);
 
-		
-		m_RequestHeader += (char *)out;
+
+		m_RequestHeader += client_request;
 	}
 
 	if (send(m_socket, m_RequestHeader.c_str(), m_RequestHeader.length(), 0) == SOCKET_ERROR)
@@ -223,51 +264,99 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		return;
 	}
 	char buffer[512001];
+	//char bufenc[512001];
 	string target_response;
 	ZeroMemory(temp, 2049);
+	//ZeroMemory(bufenc, 512001);
 	unsigned int recv_sta = 0, send_sta = 0;
+	
 
-	for (int header_len = 0; header_len < 2048; header_len++)
-	{
-		if (recv(m_socket, &c, 1, 0) == 0)
+		for (int header_len = 0; header_len < 2048; header_len++)
 		{
-			break;
+			if (recv(m_socket, &c, 1, 0) == 0)
+			{
+				break;
+			}
+			temp[header_len] = c;
+			if (temp[header_len] == '\n'&&
+				temp[header_len - 1] == '\r'&&
+				temp[header_len - 2] == '\n'&&
+				temp[header_len - 3] == '\r')
+			{
+				break;
+			}
+			if (recvstatus == SOCKET_ERROR)
+			{
+				Msg("接收目标服务器响应头失败\r\n");
+				break;
+			}
 		}
-		temp[header_len] = c;
-		if (temp[header_len] == '\n'&&
-			temp[header_len - 1] == '\r'&&
-			temp[header_len - 2] == '\n'&&
-			temp[header_len - 3] == '\r')
-		{
-			break;
-		}
-		if (recvstatus == SOCKET_ERROR)
-		{
-			Msg("接收目标服务器响应头失败\r\n");
-			break;
-		}
-	}
+	
+
+
+	//cout << "11111111111respose:" << temp << endl;
 	target_response = temp;
+	
 	cout << "目标服务器响应:" << target_response << endl;
 	long content_len = GetContentLength(&target_response);
 	long n_recvd = 0, n_sended = 0;
 
 	send(pWork->sckClient, target_response.c_str(), target_response.length(), 0);
+
 	while (1)
 	{
+		cout << "in while revc------------------------------" << endl;
 		ZeroMemory(buffer, 512001);
-		recv_sta = recv(m_socket, buffer, 512000, 0);
-		if (recv_sta == 0 || recv_sta == SOCKET_ERROR)
+		if(flag==false)
 		{
-			break;
+			recv_sta = recv(m_socket, buffer, 512000, 0);
+			if (recv_sta == 0 || recv_sta == SOCKET_ERROR)
+			{
+				break;
+			}
+			cout << "in while server revc ok------------------------------" << endl;
 		}
-		n_recvd += recv_sta;
+		else 
+		{
+			recv_sta = recv(m_socket, buffer, 512000, 0);
+			if (recv_sta == 0 || recv_sta == SOCKET_ERROR)
+			{
+				break;
+			}
+			for (int i = 0; i < strlen(buffer)-1; i++)
+			{
+				buffer[i] = buffer[i] ^ 0xff;//解密
+			}
+			cout << "2221111response:" << buffer << endl;
+			cout << "in while client revc ok------------------------------" << endl;
+		}
 
-		send_sta = send(pWork->sckClient, buffer, recv_sta, 0);
-		if (SOCKET_ERROR == send_sta || send_sta == 0)
+		n_recvd += recv_sta;
+		cout << "in while send------------------------------" << endl;
+		if (flag == true)
 		{
-			break;
+			send_sta = send(pWork->sckClient, buffer, recv_sta, 0);
+			if (SOCKET_ERROR == send_sta || send_sta == 0)
+			{
+				break;
+			}
+			cout << "in while client send ok------------------------------" << endl;
 		}
+		else
+		{
+			for (int i = 0; i < strlen(buffer) - 1; i++)
+			{
+				buffer[i] = buffer[i] ^ 0xff;//加密
+			}
+			send_sta = send(pWork->sckClient, buffer, recv_sta, 0);
+			if (SOCKET_ERROR == send_sta || send_sta == 0)
+			{
+				break;
+			}
+			cout << "in while server send ok------------------------------" << endl;
+		}
+		
+
 		n_sended += send_sta;
 		if (n_recvd >= content_len || n_sended >= content_len)
 		{

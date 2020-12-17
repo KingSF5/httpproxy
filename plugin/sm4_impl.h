@@ -186,7 +186,7 @@ void sm4_encrypt(const uint8_t *in, uint8_t *out, const sm4_ctx *ctx)
     if (strlen((char *)in) % SM4_BLOCK_SIZE != 0)
         padded = (uint8_t*) malloc( strlen((char *)in+16));
         padding(in, padded);
-    for (int i=0; i< strlen((char *)padded)-1; i+=SM4_BLOCK_SIZE)
+    for (int i=0; i< strlen((char *)padded-1); i+=SM4_BLOCK_SIZE)
     {
         sm4_encrypt_single_block(in+i, tmp, ctx);
         strncat((char *)(out+i), (char *)tmp, SM4_BLOCK_SIZE);
