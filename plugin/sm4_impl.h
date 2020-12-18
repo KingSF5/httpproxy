@@ -1,6 +1,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <ctype.h>
+
 #include "sm4.h"
 #define u8 unsigned char
 #define u32 unsigned long
@@ -223,4 +225,14 @@ long GetContentLength(string *m_ResponseHeader)
 		Msg("无法获取目标服务器返回内容长度\r\n");
 		return -1;
 	}
+}
+bool valid(char * s)
+{
+	for (int i = 0; i < strlen(s) - 1; i++)
+	{
+		if (!isprint(s[i]))
+			return false;
+
+	}
+	return true;
 }

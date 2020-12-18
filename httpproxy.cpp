@@ -1,11 +1,12 @@
 ï»¿#define _CRT_SECURE_NO_WARNINGS
 #include "httpproxy.h"
 #include "plugin/sm4_impl.h"
+#include <ctype.h>
 #define u8 unsigned char
 #define u32 unsigned long
 int listen_port = 8899; string server_ip; bool flag;
 int len = 0;
-u8 key[16] = { 0x3a,0x27,0x45,0x67,0x89,0xab,0xcd,0xef,0xe1,0x13,0x25,0x67,0x89,0xab,0xcd,0x73 };
+u8 key[16] = { 0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef };
 
 
 
@@ -78,6 +79,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string ä
 	char temp[2049], c;
 	u8 decode_Result[2049] = { 0 };
 	ZeroMemory(temp, 2049);
+	ZeroMemory(decode_Result, 2049);
 	if (flag == true) {
 		for (int header_len = 0; header_len < 2048; header_len++)
 		{
@@ -117,7 +119,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string ä
 		}
 		else
 		{
-			decode_fun(strlen(temp), key, (u8 *)(temp), decode_Result);
+			decode_fun(512+1024, key, (u8 *)(temp), decode_Result);
 			cout << "decode result:" << decode_Result << endl;
 			for (int header_len = 0; header_len < 2048; header_len++)
 			{
@@ -224,6 +226,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string ä
 	{
 
 		u8 encode_Result[3000] = { 0 };
+		u8 decode_Result[3000] = { 0 };
 		u8* plain;
 		plain = (u8 *)malloc(3000);
 		len = client_request.length();
@@ -234,14 +237,17 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string ä
 
 		print_hex(encode_Result, len);
 
+		decode_fun(512 + 1024, key, encode_Result, decode_Result);
+		if (strlen((char *)encode_Result) < len && (strlen((char *)decode_Result) != len) && !valid((char *)decode_Result))
 
-		if (strlen((char *)encode_Result) < len)
 		{
+			cout << "failed !" << strlen((char *)encode_Result) << ' ' << len << endl;
 			m_RequestHeader += client_request;
 		}
 
 		else
 		{
+			cout << "decodeddddddddddddddddddddddd" <<decode_Result << endl;
 			m_RequestHeader += (char *)encode_Result;
 		}
 	}
