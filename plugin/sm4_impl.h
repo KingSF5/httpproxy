@@ -1,213 +1,226 @@
-#include <stdio.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
-
 #include "sm4.h"
-
-
-static const uint8_t SM4_S[256] = {
-    0xD6, 0x90, 0xE9, 0xFE, 0xCC, 0xE1, 0x3D, 0xB7, 0x16, 0xB6, 0x14, 0xC2,
-    0x28, 0xFB, 0x2C, 0x05, 0x2B, 0x67, 0x9A, 0x76, 0x2A, 0xBE, 0x04, 0xC3,
-    0xAA, 0x44, 0x13, 0x26, 0x49, 0x86, 0x06, 0x99, 0x9C, 0x42, 0x50, 0xF4,
-    0x91, 0xEF, 0x98, 0x7A, 0x33, 0x54, 0x0B, 0x43, 0xED, 0xCF, 0xAC, 0x62,
-    0xE4, 0xB3, 0x1C, 0xA9, 0xC9, 0x08, 0xE8, 0x95, 0x80, 0xDF, 0x94, 0xFA,
-    0x75, 0x8F, 0x3F, 0xA6, 0x47, 0x07, 0xA7, 0xFC, 0xF3, 0x73, 0x17, 0xBA,
-    0x83, 0x59, 0x3C, 0x19, 0xE6, 0x85, 0x4F, 0xA8, 0x68, 0x6B, 0x81, 0xB2,
-    0x71, 0x64, 0xDA, 0x8B, 0xF8, 0xEB, 0x0F, 0x4B, 0x70, 0x56, 0x9D, 0x35,
-    0x1E, 0x24, 0x0E, 0x5E, 0x63, 0x58, 0xD1, 0xA2, 0x25, 0x22, 0x7C, 0x3B,
-    0x01, 0x21, 0x78, 0x87, 0xD4, 0x00, 0x46, 0x57, 0x9F, 0xD3, 0x27, 0x52,
-    0x4C, 0x36, 0x02, 0xE7, 0xA0, 0xC4, 0xC8, 0x9E, 0xEA, 0xBF, 0x8A, 0xD2,
-    0x40, 0xC7, 0x38, 0xB5, 0xA3, 0xF7, 0xF2, 0xCE, 0xF9, 0x61, 0x15, 0xA1,
-    0xE0, 0xAE, 0x5D, 0xA4, 0x9B, 0x34, 0x1A, 0x55, 0xAD, 0x93, 0x32, 0x30,
-    0xF5, 0x8C, 0xB1, 0xE3, 0x1D, 0xF6, 0xE2, 0x2E, 0x82, 0x66, 0xCA, 0x60,
-    0xC0, 0x29, 0x23, 0xAB, 0x0D, 0x53, 0x4E, 0x6F, 0xD5, 0xDB, 0x37, 0x45,
-    0xDE, 0xFD, 0x8E, 0x2F, 0x03, 0xFF, 0x6A, 0x72, 0x6D, 0x6C, 0x5B, 0x51,
-    0x8D, 0x1B, 0xAF, 0x92, 0xBB, 0xDD, 0xBC, 0x7F, 0x11, 0xD9, 0x5C, 0x41,
-    0x1F, 0x10, 0x5A, 0xD8, 0x0A, 0xC1, 0x31, 0x88, 0xA5, 0xCD, 0x7B, 0xBD,
-    0x2D, 0x74, 0xD0, 0x12, 0xB8, 0xE5, 0xB4, 0xB0, 0x89, 0x69, 0x97, 0x4A,
-    0x0C, 0x96, 0x77, 0x7E, 0x65, 0xB9, 0xF1, 0x09, 0xC5, 0x6E, 0xC6, 0x84,
-    0x18, 0xF0, 0x7D, 0xEC, 0x3A, 0xDC, 0x4D, 0x20, 0x79, 0xEE, 0x5F, 0x3E,
-    0xD7, 0xCB, 0x39, 0x48
+#define u8 unsigned char
+#define u32 unsigned long
+const u32 TBL_SYS_PARAMS[4] = {
+	0xa3b1bac6,
+	0x56aa3350,
+	0x677d9197,
+	0xb27022dc
+};
+const u32 TBL_FIX_PARAMS[32] = {
+	0x00070e15,0x1c232a31,0x383f464d,0x545b6269,
+	0x70777e85,0x8c939aa1,0xa8afb6bd,0xc4cbd2d9,
+	0xe0e7eef5,0xfc030a11,0x181f262d,0x343b4249,
+	0x50575e65,0x6c737a81,0x888f969d,0xa4abb2b9,
+	0xc0c7ced5,0xdce3eaf1,0xf8ff060d,0x141b2229,
+	0x30373e45,0x4c535a61,0x686f767d,0x848b9299,
+	0xa0a7aeb5,0xbcc3cad1,0xd8dfe6ed,0xf4fb0209,
+	0x10171e25,0x2c333a41,0x484f565d,0x646b7279
 };
 
-int sm4_set_key(const uint8_t *key , sm4_ctx * const ctx) {
-    static const uint32_t FK[4] =
-        { 0xa3b1bac6, 0x56aa3350, 0x677d9197, 0xb27022dc };
+const u8 TBL_SBOX[256] = {
+	0xd6,0x90,0xe9,0xfe,0xcc,0xe1,0x3d,0xb7,0x16,0xb6,0x14,0xc2,0x28,0xfb,0x2c,0x05,
+	0x2b,0x67,0x9a,0x76,0x2a,0xbe,0x04,0xc3,0xaa,0x44,0x13,0x26,0x49,0x86,0x06,0x99,
+	0x9c,0x42,0x50,0xf4,0x91,0xef,0x98,0x7a,0x33,0x54,0x0b,0x43,0xed,0xcf,0xac,0x62,
+	0xe4,0xb3,0x1c,0xa9,0xc9,0x08,0xe8,0x95,0x80,0xdf,0x94,0xfa,0x75,0x8f,0x3f,0xa6,
+	0x47,0x07,0xa7,0xfc,0xf3,0x73,0x17,0xba,0x83,0x59,0x3c,0x19,0xe6,0x85,0x4f,0xa8,
+	0x68,0x6b,0x81,0xb2,0x71,0x64,0xda,0x8b,0xf8,0xeb,0x0f,0x4b,0x70,0x56,0x9d,0x35,
+	0x1e,0x24,0x0e,0x5e,0x63,0x58,0xd1,0xa2,0x25,0x22,0x7c,0x3b,0x01,0x21,0x78,0x87,
+	0xd4,0x00,0x46,0x57,0x9f,0xd3,0x27,0x52,0x4c,0x36,0x02,0xe7,0xa0,0xc4,0xc8,0x9e,
+	0xea,0xbf,0x8a,0xd2,0x40,0xc7,0x38,0xb5,0xa3,0xf7,0xf2,0xce,0xf9,0x61,0x15,0xa1,
+	0xe0,0xae,0x5d,0xa4,0x9b,0x34,0x1a,0x55,0xad,0x93,0x32,0x30,0xf5,0x8c,0xb1,0xe3,
+	0x1d,0xf6,0xe2,0x2e,0x82,0x66,0xca,0x60,0xc0,0x29,0x23,0xab,0x0d,0x53,0x4e,0x6f,
+	0xd5,0xdb,0x37,0x45,0xde,0xfd,0x8e,0x2f,0x03,0xff,0x6a,0x72,0x6d,0x6c,0x5b,0x51,
+	0x8d,0x1b,0xaf,0x92,0xbb,0xdd,0xbc,0x7f,0x11,0xd9,0x5c,0x41,0x1f,0x10,0x5a,0xd8,
+	0x0a,0xc1,0x31,0x88,0xa5,0xcd,0x7b,0xbd,0x2d,0x74,0xd0,0x12,0xb8,0xe5,0xb4,0xb0,
+	0x89,0x69,0x97,0x4a,0x0c,0x96,0x77,0x7e,0x65,0xb9,0xf1,0x09,0xc5,0x6e,0xc6,0x84,
+	0x18,0xf0,0x7d,0xec,0x3a,0xdc,0x4d,0x20,0x79,0xee,0x5f,0x3e,0xd7,0xcb,0x39,0x48
+};
 
-    static const uint32_t CK[32] = {
-        0x00070E15, 0x1C232A31, 0x383F464D, 0x545B6269,
-        0x70777E85, 0x8C939AA1, 0xA8AFB6BD, 0xC4CBD2D9,
-        0xE0E7EEF5, 0xFC030A11, 0x181F262D, 0x343B4249,
-        0x50575E65, 0x6C737A81, 0x888F969D, 0xA4ABB2B9,
-        0xC0C7CED5, 0xDCE3EAF1, 0xF8FF060D, 0x141B2229,
-        0x30373E45, 0x4C535A61, 0x686F767D, 0x848B9299,
-        0xA0A7AEB5, 0xBCC3CAD1, 0xD8DFE6ED, 0xF4FB0209,
-        0x10171E25, 0x2C333A41, 0x484F565D, 0x646B7279
-    };
-
-    uint32_t K[4];
-    K[0] = load_uint32_be(key, 0) ^ FK[0];
-    K[1] = load_uint32_be(key, 1) ^ FK[1];
-    K[2] = load_uint32_be(key, 2) ^ FK[2];
-    K[3] = load_uint32_be(key, 3) ^ FK[3];
-
-    for(int i=0;i<SM4_KEY_SCHEDULE;i++) {
-	    uint32_t X = K[(i+1) %4] ^ K[(i+2) %4] ^ K[(i+3) %4] ^ CK[i];
-	    uint32_t t = 0;
-
-	    t |= (uint32_t)(SM4_S[(uint8_t) (X>>24)]) << 24;
-	    t |= (uint32_t)(SM4_S[(uint8_t) (X>>16)]) << 16;
-	    t |= (uint32_t)(SM4_S[(uint8_t) (X>>8)]) << 8;
-	    t |= (uint32_t)SM4_S[(uint8_t) X];
-	    t = t ^ ROT32L(t, 13) ^ ROT32L(t, 23);
-	    K[i %4] = K[i % 4] ^ t;
-	    ctx->rk[i] = K[i %4];
-    }
-    return 1;
-    
-}
-
-void SM4_F(uint32_t * const blks, const uint32_t *rkg) {
-	blks[0] ^= SM4_T(blks[1] ^ blks[2] ^ blks[3] ^ rkg[0]);
-	blks[1] ^= SM4_T(blks[2] ^ blks[3] ^ blks[0] ^ rkg[1]);
-	blks[2] ^= SM4_T(blks[3] ^ blks[0] ^ blks[1] ^ rkg[2]);
-	blks[3] ^= SM4_T(blks[0] ^ blks[1] ^ blks[2] ^ rkg[3]);
-
-}
-
-uint32_t SM4_T(uint32_t X) {
-	uint32_t t = 0;
-	t |= ((uint32_t)SM4_S[(uint8_t)(X>>24)]) << 24;
-	t |= ((uint32_t)SM4_S[(uint8_t)(X>>16)]) << 16;
-	t |= ((uint32_t)SM4_S[(uint8_t)(X>>8)]) << 8;
-	t |= ((uint32_t)SM4_S[(uint8_t)(X)]);
-	t ^= ROT32L(t, 2) ^ ROT32L(t, 10) ^ ROT32L(t, 18) ^ ROT32L(t, 24);
-	return t;
-
-}
-
-uint32_t load_uint32_be(const uint8_t *b, int n) {
-	return ( ((uint32_t)b[n*4] << 24) |
-		 ((uint32_t)b[n*4+1] << 16) |
-		 ((uint32_t)b[n*4+2] << 8) |
-		 ((uint32_t)b[n*4+3]));
-}
-
-void store_uint32_be(uint32_t n, uint8_t * const b) {
-	b[0] = (uint8_t)(n>>24);
-	b[1] = (uint8_t)(n>>16);
-	b[2] = (uint8_t)(n>>8);
-	b[3] = (uint8_t)(n);
-}
-
-void sm4_encrypt_single_block(const uint8_t *in, uint8_t *out, const sm4_ctx *ctx) {
-	uint32_t blks[4];
-	blks[0] = load_uint32_be(in, 0);
-	blks[1] = load_uint32_be(in, 1);
-	blks[2] = load_uint32_be(in, 2);
-	blks[3] = load_uint32_be(in, 3);
-
-	for (int i=0;i<SM4_KEY_SCHEDULE>>2;i++) {
-		SM4_F(blks, &ctx->rk[i*4]);
+void print_hex(u8 *data, int len)
+{
+	int i = 0;
+	char alTmp[16] = { '0','1','2','3','4','5','6','7','8','9','a','b','c','d','e','f' };
+	for (i = 0; i < len; i++)
+	{
+		printf("%c", alTmp[data[i] / 16]);
+		printf("%c", alTmp[data[i] % 16]);
+		putchar(' ');
 	}
-	store_uint32_be(blks[3], out);
-	store_uint32_be(blks[2], out+4);
-	store_uint32_be(blks[1], out+8);
-	store_uint32_be(blks[0], out+12);
+	putchar('\n');
 }
 
-void sm4_decrypt_single_block(const uint8_t *in, uint8_t *out, const sm4_ctx * ctx) {
-	uint32_t blks[4];
-	uint32_t decrypt_key[SM4_KEY_SCHEDULE];
-	for(int i=0;i<SM4_KEY_SCHEDULE;i++) {
-		decrypt_key[i] = ctx->rk[SM4_KEY_SCHEDULE-i-1];
+void four_uCh2uLong(u8 *in, u32 *out)
+{
+	int i = 0;
+	*out = 0;
+	for (i = 0; i < 4; i++)
+		*out = ((u32)in[i] << (24 - i * 8)) ^ *out;
+}
+
+void uLong2four_uCh(u32 in, u8 *out)
+{
+	int i = 0;
+	for (i = 0; i < 4; i++)
+		*(out + i) = (u32)(in >> (24 - i * 8));
+}
+
+u32 move(u32 data, int length)
+{
+	u32 result = 0;
+	result = (data << length) ^ (data >> (32 - length));
+
+	return result;
+}
+
+u32 func_key(u32 input)
+{
+	int i = 0;
+	u32 ulTmp = 0;
+	u8 ucIndexList[4] = { 0 };
+	u8 ucSboxValueList[4] = { 0 };
+	uLong2four_uCh(input, ucIndexList);
+	for (i = 0; i < 4; i++)
+	{
+		ucSboxValueList[i] = TBL_SBOX[ucIndexList[i]];
 	}
-	blks[0] = load_uint32_be(in, 0);
-	blks[1] = load_uint32_be(in, 1);
-	blks[2] = load_uint32_be(in, 2);
-	blks[3] = load_uint32_be(in, 3);
+	four_uCh2uLong(ucSboxValueList, &ulTmp);
+	ulTmp = ulTmp ^ move(ulTmp, 13) ^ move(ulTmp, 23);
 
-	for (int i=0;i<SM4_KEY_SCHEDULE>>2;i++) {
-		SM4_F(blks, &decrypt_key[i*4]);
+	return ulTmp;
+}
+
+u32 func_data(u32 input)
+{
+	int i = 0;
+	u32 ulTmp = 0;
+	u8 ucIndexList[4] = { 0 };
+	u8 ucSboxValueList[4] = { 0 };
+	uLong2four_uCh(input, ucIndexList);
+	for (i = 0; i < 4; i++)
+	{
+		ucSboxValueList[i] = TBL_SBOX[ucIndexList[i]];
 	}
-	store_uint32_be(blks[3], out);
-	store_uint32_be(blks[2], out+4);
-	store_uint32_be(blks[1], out+8);
-	store_uint32_be(blks[0], out+12);
+	four_uCh2uLong(ucSboxValueList, &ulTmp);
+	ulTmp = ulTmp ^ move(ulTmp, 2) ^ move(ulTmp, 10) ^ move(ulTmp, 18) ^ move(ulTmp, 24);
 
+	return ulTmp;
 }
 
-void xor_blk(uint8_t *a, uint8_t *b) {
-	uint32_t A[4], B[4];
-	A[0] = load_uint32_be(a, 0);
-	A[1] = load_uint32_be(a, 1);
-	A[2] = load_uint32_be(a, 2);
-	A[3] = load_uint32_be(a, 3);
 
-	B[0] = load_uint32_be(b, 0);
-	B[1] = load_uint32_be(b, 1);
-	B[2] = load_uint32_be(b, 2);
-	B[3] = load_uint32_be(b, 3);
-
-	A[0] ^= B[0];
-	A[1] ^= B[1];
-	A[2] ^= B[2];
-	A[3] ^= B[3];
-
-	store_uint32_be(A[0], a);
-	store_uint32_be(A[1], a+4);
-	store_uint32_be(A[2], a+8);
-	store_uint32_be(A[3], a+12);
-}
-
-void padding(const uint8_t *in, uint8_t *out)
+void encode_fun(int len, u8 *key, u8 *input, u8 *output)
 {
-    int len,padlen;
-    len = strlen((char*)in);
-    padlen = SM4_BLOCK_SIZE-len%SM4_BLOCK_SIZE;
-    strncpy((char *)out, (char *)in, len);
-    for (int i=0; i<padlen; i++)
-    {
-        strncat((char *)(out+len),(char *)&padlen, 1);
-    }
+	int i = 0, j = 0;
+	u8 *p = (u8 *)malloc(3000);
+	u32 ulKeyTmpList[4] = { 0 };
+	u32 ulKeyList[36] = { 0 };
+	u32 ulDataList[36] = { 0 };
+
+	four_uCh2uLong(key, &(ulKeyTmpList[0]));
+	four_uCh2uLong(key + 4, &(ulKeyTmpList[1]));
+	four_uCh2uLong(key + 8, &(ulKeyTmpList[2]));
+	four_uCh2uLong(key + 12, &(ulKeyTmpList[3]));
+
+	ulKeyList[0] = ulKeyTmpList[0] ^ TBL_SYS_PARAMS[0];
+	ulKeyList[1] = ulKeyTmpList[1] ^ TBL_SYS_PARAMS[1];
+	ulKeyList[2] = ulKeyTmpList[2] ^ TBL_SYS_PARAMS[2];
+	ulKeyList[3] = ulKeyTmpList[3] ^ TBL_SYS_PARAMS[3];
+
+	for (i = 0; i < 32; i++)
+	{
+		ulKeyList[i + 4] = ulKeyList[i] ^ func_key(ulKeyList[i + 1] ^ ulKeyList[i + 2] ^ ulKeyList[i + 3] ^ TBL_FIX_PARAMS[i]);
+	}
+
+	for (i = 0; i < len; i++)
+		*(p + i) = *(input + i);
+	for (i = 0; i < 16 - len % 16; i++)		*(p + len + i) = 0;
+
+	for (j = 0; j < len / 16 + ((len % 16) ? 1 : 0); j++)
+	{
+		four_uCh2uLong(p + 16 * j, &(ulDataList[0]));
+		four_uCh2uLong(p + 16 * j + 4, &(ulDataList[1]));
+		four_uCh2uLong(p + 16 * j + 8, &(ulDataList[2]));
+		four_uCh2uLong(p + 16 * j + 12, &(ulDataList[3]));
+		for (i = 0; i < 32; i++)
+		{
+			ulDataList[i + 4] = ulDataList[i] ^ func_data(ulDataList[i + 1] ^ ulDataList[i + 2] ^ ulDataList[i + 3] ^ ulKeyList[i + 4]);
+		}
+		uLong2four_uCh(ulDataList[35], output + 16 * j);
+		uLong2four_uCh(ulDataList[34], output + 16 * j + 4);
+		uLong2four_uCh(ulDataList[33], output + 16 * j + 8);
+		uLong2four_uCh(ulDataList[32], output + 16 * j + 12);
+	}
+	free(p);
 }
 
 
-void unpadding(const uint8_t *in, uint8_t *out)
+void decode_fun(int len, u8 *key, u8 *input, u8 *output)
 {
-    strncpy((char *)out, (char *)in, strlen((char *)in)-in[strlen((char *)in)-1] );
-    
+
+	/*for (int i = 0; i < strlen((char *)input) - 1; i++)
+	{
+		input[i] = input[i] ^ 0xaf;  //解密
+	}*/
+	int i = 0, j = 0;
+	u32 ulKeyTmpList[4] = { 0 };
+	u32 ulKeyList[36] = { 0 };
+	u32 ulDataList[36] = { 0 };
+
+	four_uCh2uLong(key, &(ulKeyTmpList[0]));
+	four_uCh2uLong(key + 4, &(ulKeyTmpList[1]));
+	four_uCh2uLong(key + 8, &(ulKeyTmpList[2]));
+	four_uCh2uLong(key + 12, &(ulKeyTmpList[3]));
+
+	ulKeyList[0] = ulKeyTmpList[0] ^ TBL_SYS_PARAMS[0];
+	ulKeyList[1] = ulKeyTmpList[1] ^ TBL_SYS_PARAMS[1];
+	ulKeyList[2] = ulKeyTmpList[2] ^ TBL_SYS_PARAMS[2];
+	ulKeyList[3] = ulKeyTmpList[3] ^ TBL_SYS_PARAMS[3];
+
+	for (i = 0; i < 32; i++)
+	{
+		ulKeyList[i + 4] = ulKeyList[i] ^ func_key(ulKeyList[i + 1] ^ ulKeyList[i + 2] ^ ulKeyList[i + 3] ^ TBL_FIX_PARAMS[i]);
+	}
+
+
+	for (j = 0; j < len / 16; j++)
+	{
+		four_uCh2uLong(input + 16 * j, &(ulDataList[0]));
+		four_uCh2uLong(input + 16 * j + 4, &(ulDataList[1]));
+		four_uCh2uLong(input + 16 * j + 8, &(ulDataList[2]));
+		four_uCh2uLong(input + 16 * j + 12, &(ulDataList[3]));
+
+		for (i = 0; i < 32; i++)
+		{
+			ulDataList[i + 4] = ulDataList[i] ^ func_data(ulDataList[i + 1] ^ ulDataList[i + 2] ^ ulDataList[i + 3] ^ ulKeyList[35 - i]);
+		}
+		uLong2four_uCh(ulDataList[35], output + 16 * j);
+		uLong2four_uCh(ulDataList[34], output + 16 * j + 4);
+		uLong2four_uCh(ulDataList[33], output + 16 * j + 8);
+		uLong2four_uCh(ulDataList[32], output + 16 * j + 12);
+	}
 }
 
-void sm4_encrypt(const uint8_t *in, uint8_t *out, const sm4_ctx *ctx)
-{
-    uint8_t* padded=NULL;
-    uint8_t tmp[SM4_BLOCK_SIZE*2];
-    if (strlen((char *)in) % SM4_BLOCK_SIZE != 0)
-        padded = (uint8_t*) malloc( strlen((char *)in+16));
-        padding(in, padded);
-    for (int i=0; i< strlen((char *)padded)-1; i+=SM4_BLOCK_SIZE)
-    {
-        sm4_encrypt_single_block(in+i, tmp, ctx);
-        strncat((char *)(out+i), (char *)tmp, SM4_BLOCK_SIZE);
-    }
-    
-    free(padded);
-    return;
-}
 
-void sm4_decrypt(const uint8_t *in, uint8_t *out, const sm4_ctx *ctx)
+long GetContentLength(string *m_ResponseHeader)
 {
-    uint8_t* padded;
-    uint8_t tmp[SM4_BLOCK_SIZE*2];
-    padded = (uint8_t*) malloc( strlen((char *)in+16));
-    for (int i=0; i< strlen((char *)in); i+=SM4_BLOCK_SIZE)
-    {
-        sm4_decrypt_single_block(in+i, tmp, ctx);
-        strncat((char *)(padded+i), (char *)tmp, SM4_BLOCK_SIZE);
-    }
-    
-    unpadding(padded, out);
-    free(padded);
-    return;
+	long nFileSize = 0;
+	char szValue[10];
+	int nPos = -1;
+	nPos = m_ResponseHeader->find("Content-Length", 0);
+	if (nPos != -1)
+	{
+		nPos += 16;
+		int nCr = m_ResponseHeader->find("\r\n", nPos);
+		memcpy(szValue, (char *)m_ResponseHeader->c_str() + nPos, nCr - nPos);
+		nFileSize = atoi(szValue);
+		return nFileSize;
+	}
+	else
+	{
+		Msg("无法获取目标服务器返回内容长度\r\n");
+		return -1;
+	}
 }
