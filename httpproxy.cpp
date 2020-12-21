@@ -381,9 +381,9 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 				_pclose(pipe);
 				html_return = buffer_return;
 				int if_bad = html_return.find("huangse");
-				if (if_bad == html_return.npos)
+				if (if_bad != html_return.npos)
 				{
-					printf("文字中含有敏感图片:\t%s\n", buffer_return);
+					printf("图片中含有敏感信息！\n");
 					closesocket(pWork->sckClient);
 					closesocket(m_socket);
 					Msg("一个传输线程结束...\r\n");
@@ -608,7 +608,6 @@ int main(int argc, char **argv)
 	WORD wVersionRequested;
 	WSADATA wsaData;
 	int err;
-	read_url();
 	wVersionRequested = MAKEWORD(2, 2);
 	err = WSAStartup(wVersionRequested, &wsaData);
 	if (err != 0)
@@ -626,6 +625,7 @@ int main(int argc, char **argv)
 	if (argc == 1)//argc==1则为服务器，否则是客户端需要吸收ip；
 	{
 		flag = false;
+		read_url();
 		printf("以服务器模式启动\n");
 	}
 	else if (argc == 2)
