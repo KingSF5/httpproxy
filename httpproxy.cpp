@@ -1,29 +1,19 @@
 ﻿#define _CRT_SECURE_NO_WARNINGS
+#include <stdio.h>
 #include "httpproxy.h"
 #include "plugin/sm4_impl.h"
-int listen_port = 8899;string server_ip;bool flag;
-
-long GetContentLength(string *m_ResponseHeader)
-{
-	long nFileSize = 0;
-	char szValue[10];
-	int nPos = -1;
-	nPos = m_ResponseHeader->find("Content-Length", 0);
-	if (nPos != -1)
-	{
-		nPos += 16;
-		int nCr = m_ResponseHeader->find("\r\n", nPos);
-		memcpy(szValue, (char *)m_ResponseHeader->c_str() + nPos, nCr - nPos);
-		nFileSize = atoi(szValue);
-		return nFileSize;
-	}
-	else
-	{
-		Msg("无法获取目标服务器返回内容长度\r\n");
-		return -1;
-	}
-}
-
+#include <ctype.h>
+#include <fstream>
+#include <string>
+#include <vector>
+#define u8 unsigned char
+#define u32 unsigned long
+int listen_port = 8899;
+string server_ip;
+string url_control;
+bool flag;
+int len = 0;
+u8 key[16] = { 0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef,0x01,0x23,0x45,0x67,0x89,0xab,0xcd,0xef };
 
 bool AnalyzeClientRequest(string *client_request, client_request_summary *crs)
 {
@@ -89,10 +79,12 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 {
 	WORKPARAM *pWork = (WORKPARAM *)pvoid;
 	unsigned long recvstatus = 0;
-	string client_request,tmp;
+	string client_request, tmp;
 	char temp[2049], c;
+	u8 decode_Result[2049] = { 0 };
 	ZeroMemory(temp, 2049);
-	if(flag == true){
+	ZeroMemory(decode_Result, 2049);
+	if (flag == true) {
 		for (int header_len = 0; header_len < 2048; header_len++)
 		{
 			if (recv(pWork->sckClient, &c, 1, 0) == 0)
@@ -114,6 +106,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 			}
 
 		}
+		client_request += temp;
 	}
 	else
 	{
@@ -121,41 +114,41 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		{
 			Msg("recv error\n");
 		}
-		for (int i = 0; i < strlen(temp)-1; i++)
-		{
-			temp[i] = temp[i] ^ 0xFF;  //解密
-		}
-		for (int header_len = 0; header_len < 2048; header_len++)
-		{
-			if (temp[header_len] == '\n'&&
-				temp[header_len - 1] == '\r'&&
-				temp[header_len - 2] == '\n'&&
-				temp[header_len - 3] == '\r')
-			{
-				break;
-			}
-			if (recvstatus == SOCKET_ERROR)
-			{
-				Msg("接收客户端请求头失败\r\n");
-				break;
-			}
 
-		}
-	}
-	/*
-	if (flag == false) {
-		tmp += temp;
-		sm4_ctx ctx;
-		uint8_t out[10000];
-		uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
 
-		sm4_set_key(gkey, &ctx);
-		sm4_decrypt((uint8_t *)tmp.c_str(), out, &ctx);
-		client_request += (char *)out;
+		cout << strlen(temp) << endl;
+		if (temp[0] == 'G' && temp[1] == 'E' && temp[2] == 'T')
+		{
+			client_request += temp;
+		}
+		else
+		{
+			decode_fun(512+1024, key, (u8 *)(temp), decode_Result);
+			cout << "decode result:" << decode_Result << endl;
+			for (int header_len = 0; header_len < 2048; header_len++)
+			{
+				if (decode_Result[header_len] == '\n'&&
+					decode_Result[header_len - 1] == '\r'&&
+					decode_Result[header_len - 2] == '\n'&&
+					decode_Result[header_len - 3] == '\r')
+				{
+					break;
+				}
+				if (recvstatus == SOCKET_ERROR)
+				{
+					Msg("接收客户端请求头失败\r\n");
+					break;
+				}
+
+			}
+			client_request += (char *)decode_Result;
+		}
+
 	}
-	*/
-	client_request += temp;
+
+
 	cout << "客户端的请求内容：" << endl << client_request << endl;
+
 	client_request_summary crs;
 	if (!AnalyzeClientRequest(&client_request, &crs))
 	{
@@ -181,7 +174,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 	//140 if flag=1时到代理ip 意思是flag=1时ip_addr=代理ip且将151行port从80->8899//140-147仅在flag=0时使用
 	struct sockaddr_in destaddr;
 	struct in_addr ip_addr;
-	if(flag==true)
+	if (flag == true)
 	{
 		hostent *m_phostip = gethostbyname(server_ip.c_str());
 		if (m_phostip == NULL)
@@ -198,12 +191,46 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 	}
 	else
 	{
+		int if_banned_url;
+		if_banned_url = url_control.find(crs.host);
+		if (if_banned_url != url_control.npos)
+		{
+			cout << "URL在禁止访问列表内" << endl;
+			closesocket(pWork->sckClient);
+			closesocket(m_socket);
+
+			Msg("一个传输线程结束...\r\n");
+			return;
+		}
+
 		hostent *m_phostip = gethostbyname(crs.host.c_str());
 		if (m_phostip == NULL)
 		{
 			Msg("所请求的域名解析失败!\r\n");
 			return;
 		}
+
+		printf("IP列表: \n");
+		for (int x = 0; ; x++)	//for (x = 0; *host->h_addr_list; x++) //2个for写法一样
+		{
+			int if_banned_ip;
+			printf("IP:[%d][%s]\n", x, inet_ntoa(*((in_addr *)m_phostip->h_addr_list[x])));
+			if_banned_ip = url_control.find(inet_ntoa(*((in_addr *)m_phostip->h_addr_list[x])));
+			if (if_banned_ip != url_control.npos)
+			{
+				cout << "IP、URL解析的IP在禁止访问列表内" << endl;
+				closesocket(pWork->sckClient);
+				closesocket(m_socket);
+
+				Msg("一个传输线程结束...\r\n");
+				return;
+			}
+			if (m_phostip->h_addr_list[x] + m_phostip->h_length >= m_phostip->h_name)
+			{
+				break;
+			}
+		}
+
 		memcpy(&ip_addr, m_phostip->h_addr_list[0], 4);
 		memset((void *)&destaddr, 0, sizeof(destaddr));
 		destaddr.sin_family = AF_INET;
@@ -218,7 +245,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 
 	long recvlength = 0;
 	string m_RequestHeader; //160-180 仅在flag=0时使用，flag=1时 m_RequestHeader=client_request 并复用176-180
-	if(flag == false)
+	if (flag == false)
 	{
 		m_RequestHeader = m_RequestHeader + crs.type + " " + crs.url + " HTTP/1.1\r\n";
 		m_RequestHeader = m_RequestHeader + "Host: " + crs.host + "\r\n";
@@ -235,27 +262,33 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		m_RequestHeader += "\r\n";
 	}
 	else
-	{/*
-		sm4_ctx ctx;
-		uint8_t out[10000];
-		uint8_t gkey[] = { 0x61, 0x61, 0x61, 0x61, 0x89, 0xAB, 0xCD, 0xEF, 0xFE, 0xDC, 0xBA, 0x98, 0x76, 0x54, 0x32, 0x10 };
-		printf("aaaaaaaaaaaaaaaaaa\n");*/
-		for (int i = 0; i < client_request.length()-1; i++)
+	{
+
+		u8 encode_Result[3000] = { 0 };
+		u8 decode_Result[3000] = { 0 };
+		u8* plain;
+		plain = (u8 *)malloc(3000);
+		len = client_request.length();
+		cout << "len:" << len << endl;
+		plain = (u8 *)(client_request.c_str());
+		printf("%s", plain);
+		encode_fun(strlen((char *)plain), key, plain, encode_Result);
+
+		print_hex(encode_Result, len);
+
+		decode_fun(512 + 1024, key, encode_Result, decode_Result);
+		if (strlen((char *)encode_Result) < len && (strlen((char *)decode_Result) != len) && !valid((char *)decode_Result))
+
 		{
-			client_request[i] = client_request[i] ^ 0xFF;  //加密
+			cout << "failed !" << strlen((char *)encode_Result) << ' ' << len << endl;
+			m_RequestHeader += client_request;
 		}
-		//sm4_set_key(gkey, &ctx);
-		//sm4_encrypt((uint8_t *)client_request.c_str(), out, &ctx);
-		//for (int i = 0; i < ); i++)
-		//{
-			//printf("%d ", out[i]);
-		//}
-		cout << client_request << endl;
-		//printf("%s", out);
-		
 
-
-		m_RequestHeader += client_request;
+		else
+		{
+			cout << "decode:" <<decode_Result << endl;
+			m_RequestHeader += (char *)encode_Result;
+		}
 	}
 
 	if (send(m_socket, m_RequestHeader.c_str(), m_RequestHeader.length(), 0) == SOCKET_ERROR)
@@ -264,71 +297,166 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		return;
 	}
 	char buffer[512001];
-	//char bufenc[512001];
 	string target_response;
 	ZeroMemory(temp, 2049);
-	//ZeroMemory(bufenc, 512001);
 	unsigned int recv_sta = 0, send_sta = 0;
-	
 
-		for (int header_len = 0; header_len < 2048; header_len++)
+
+	for (int header_len = 0; header_len < 2048; header_len++)
+	{
+		if (recv(m_socket, &c, 1, 0) == 0)
 		{
-			if (recv(m_socket, &c, 1, 0) == 0)
-			{
-				break;
-			}
-			temp[header_len] = c;
-			if (temp[header_len] == '\n'&&
-				temp[header_len - 1] == '\r'&&
-				temp[header_len - 2] == '\n'&&
-				temp[header_len - 3] == '\r')
-			{
-				break;
-			}
-			if (recvstatus == SOCKET_ERROR)
-			{
-				Msg("接收目标服务器响应头失败\r\n");
-				break;
-			}
+			break;
 		}
-	
+		temp[header_len] = c;
+		if (temp[header_len] == '\n'&&
+			temp[header_len - 1] == '\r'&&
+			temp[header_len - 2] == '\n'&&
+			temp[header_len - 3] == '\r')
+		{
+			break;
+		}
+		if (recvstatus == SOCKET_ERROR)
+		{
+			Msg("接收目标服务器响应头失败\r\n");
+			break;
+		}
+	}
 
-
-	//cout << "11111111111respose:" << temp << endl;
 	target_response = temp;
-	
+
 	cout << "目标服务器响应:" << target_response << endl;
+	
 	long content_len = GetContentLength(&target_response);
 	long n_recvd = 0, n_sended = 0;
-
+	
+	if(flag == false){
+		//判断文本与图片
+		int if_main, if_image;
+		if_image = target_response.find("image");
+		if_main = target_response.find("htm");
+		if (if_main != client_request.npos)
+		{
+			cout << "It is a html" << endl;
+			char buffer_return[4096];
+			string szCmd, html_return;
+			szCmd = (string)"python ./plugin/textcontent_audit.py" + " " + "http://" + crs.host + crs.url;
+			FILE * pipe = _popen(szCmd.c_str(), "r");
+			if (!pipe) {
+				cout << "popen false" << endl;
+			}
+			else
+			{
+				while (!feof(pipe)) {
+					fgets(buffer_return, sizeof(buffer_return), pipe);
+				}
+				_pclose(pipe);
+				html_return = buffer_return;
+				int if_bad = html_return.find("None");
+				if (if_bad == html_return.npos)
+				{
+					printf("文字中含有敏感字符:\t%s\n", buffer_return);
+					closesocket(pWork->sckClient);
+					closesocket(m_socket);
+					Msg("一个传输线程结束...\r\n");
+					return;
+				}
+			}
+		}
+		if (if_image != client_request.npos)
+		{
+			cout << "It is a image" << endl;
+			char buffer_return[4096];
+			string szCmd, html_return;
+			szCmd = (string)"python ./plugin/predict.py" + " " + "http://" + crs.host + crs.url;
+			FILE * pipe = _popen(szCmd.c_str(), "r");
+			if (!pipe) {
+				cout << "popen false" << endl;
+			}
+			else
+			{
+				while (!feof(pipe)) {
+					fgets(buffer_return, sizeof(buffer_return), pipe);
+				}
+				_pclose(pipe);
+				html_return = buffer_return;
+				int if_bad = html_return.find("huangse");
+				if (if_bad == html_return.npos)
+				{
+					printf("文字中含有敏感图片:\t%s\n", buffer_return);
+					closesocket(pWork->sckClient);
+					closesocket(m_socket);
+					Msg("一个传输线程结束...\r\n");
+					return;
+				}
+			}
+		}
+	}
+	
 	send(pWork->sckClient, target_response.c_str(), target_response.length(), 0);
-
 	while (1)
 	{
+		ZeroMemory(buffer, 512001);
+		recv_sta = recv(m_socket, buffer, 512000, 0);
+		if (recv_sta == 0 || recv_sta == SOCKET_ERROR)
+		{
+			break;
+		}
+		n_recvd += recv_sta;
+
+		send_sta = send(pWork->sckClient, buffer, recv_sta, 0);
+		if (SOCKET_ERROR == send_sta || send_sta == 0)
+		{
+			break;
+		}
+		n_sended += send_sta;
+		if (n_recvd >= content_len || n_sended >= content_len)
+		{
+			break;
+		}
+		Sleep(100);
+	}
+	/*
+	while (1)
+	{
+		int length_before_send, length_after_send, length_before_revc, length_after_revc;
 		cout << "in while revc------------------------------" << endl;
 		ZeroMemory(buffer, 512001);
-		if(flag==false)
+		if (flag == false)
 		{
 			recv_sta = recv(m_socket, buffer, 512000, 0);
 			if (recv_sta == 0 || recv_sta == SOCKET_ERROR)
 			{
 				break;
 			}
-			cout << "in while server revc ok------------------------------" << endl;
+			cout << "in while server revc client ok------------------------------" << endl;
 		}
-		else 
+		else
 		{
 			recv_sta = recv(m_socket, buffer, 512000, 0);
 			if (recv_sta == 0 || recv_sta == SOCKET_ERROR)
 			{
 				break;
 			}
-			for (int i = 0; i < strlen(buffer)-1; i++)
+			length_before_revc = strlen(buffer);
+			if (length_before_revc > 0)
 			{
-				buffer[i] = buffer[i] ^ 0xff;//解密
+				for (int i = 0; i < length_before_revc - 1; i++)
+				{
+					buffer[i] = buffer[i] ^ 0xf3;//解密
+				}
+				length_after_revc = strlen(buffer);
+				if (length_before_revc != length_after_revc)
+				{
+					cout << "revc decode error------------------------------" << endl;
+					for (int i = 0; i < length_before_revc - 1; i++)
+					{
+						buffer[i] = buffer[i] ^ 0xf3;//反解密
+					}
+				}
 			}
-			cout << "2221111response:" << buffer << endl;
-			cout << "in while client revc ok------------------------------" << endl;
+			cout << "response:" << buffer << endl;
+			cout << "in while client revc server ok------------------------------" << endl;
 		}
 
 		n_recvd += recv_sta;
@@ -340,22 +468,34 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 			{
 				break;
 			}
-			cout << "in while client send ok------------------------------" << endl;
+			cout << "in while client send 127.0.0.1 ok------------------------------" << endl;
 		}
 		else
 		{
-			for (int i = 0; i < strlen(buffer) - 1; i++)
+			length_before_send = strlen(buffer);
+			if (length_before_send > 0)
 			{
-				buffer[i] = buffer[i] ^ 0xff;//加密
+				for (int i = 0; i < length_before_send - 1; i++)
+				{
+					buffer[i] = buffer[i] ^ 0xf3;//加密
+				}
+				length_after_send = strlen(buffer);
+				if (length_before_send != length_after_send)
+				{
+					for (int i = 0; i < length_before_send - 1; i++)
+					{
+						buffer[i] = buffer[i] ^ 0xf3;//反加密
+					}
+				}
 			}
 			send_sta = send(pWork->sckClient, buffer, recv_sta, 0);
 			if (SOCKET_ERROR == send_sta || send_sta == 0)
 			{
 				break;
 			}
-			cout << "in while server send ok------------------------------" << endl;
+			cout << "in while server send real server ok-----------------------------" << endl;
 		}
-		
+
 
 		n_sended += send_sta;
 		if (n_recvd >= content_len || n_sended >= content_len)
@@ -364,6 +504,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string �
 		}
 		Sleep(100);
 	}
+	*/
 	closesocket(pWork->sckClient);
 	closesocket(m_socket);
 
@@ -441,12 +582,33 @@ void ListenThread(void *pvoid)
 	return;
 }
 
+//读取url、ip地址
+void read_url()
+{
+	ifstream ifs("./list/url.txt");
+	if (!ifs.is_open())
+	{
+		cerr << "ifstream open file error!\n";
+		return;
+	}
+	ifs.seekg(0, ios_base::end);  //先把文件输入流指针定位到文档末尾来获取文档的长度
+	int length = ifs.tellg();
+	ifs.seekg(ios_base::beg);  //再将指针定位到文档开头来进行读取
+	char* buff = new char[length + 1](); //开辟一个buff
+	ifs.read(buff, length + 1);  //将内容读取到buff中
+	string content(buff, length + 1); //再将buff赋值给content
+	//cout << content << endl;
+	url_control = content;
+	delete[] buff;
+}
+
 
 int main(int argc, char **argv)
 {
 	WORD wVersionRequested;
 	WSADATA wsaData;
 	int err;
+	read_url();
 	wVersionRequested = MAKEWORD(2, 2);
 	err = WSAStartup(wVersionRequested, &wsaData);
 	if (err != 0)
@@ -461,22 +623,24 @@ int main(int argc, char **argv)
 	}
 
 
-	if(argc==1)//argc==1则为服务器，否则是客户端需要吸收ip；
+	if (argc == 1)//argc==1则为服务器，否则是客户端需要吸收ip；
 	{
-		flag=false;
+		flag = false;
 		printf("以服务器模式启动\n");
-	}else if(argc==2)
+	}
+	else if (argc == 2)
 	{
-		flag=true;
-		server_ip=argv[1];
-		
+		flag = true;
+		server_ip = argv[1];
+
 		cout << "以代理模式启动，代理服务器ip为：" << server_ip << endl;
-	}else
+	}
+	else
 	{
 		return false;
 	}
-	
-	
+
+
 	_beginthread(ListenThread, 0, NULL);
 	while (true)
 	{
