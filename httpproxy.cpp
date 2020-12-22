@@ -124,7 +124,7 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string ä
 		else
 		{
 			decode_fun(512+1024, key, (u8 *)(temp), decode_Result);
-			cout << "decode result:" << decode_Result << endl;
+			//cout << "decode result:" << decode_Result << endl;
 			for (int header_len = 0; header_len < 2048; header_len++)
 			{
 				if (decode_Result[header_len] == '\n'&&
@@ -142,6 +142,8 @@ void WorkThread(void *pvoid)//void WorkThread(void *pvoid, boolen flag, string ä
 
 			}
 			client_request += (char *)decode_Result;
+			//client_request += "\0";
+
 		}
 
 	}

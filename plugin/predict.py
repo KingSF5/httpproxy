@@ -1,9 +1,10 @@
 from PIL import Image 
 import numpy as np
 import urllib
+import random
 from keras.models import load_model 
 #import os
-#os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+#os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 WIDTH = 192
 HEIGHT = 192
@@ -27,8 +28,10 @@ def LoadModel(model,img_path):
     realimg.reshape(1 ,192, 192 , 1)
     realimg = realimg.astype('float32') / 255
     a=model.predict(realimg)
-    #print(a)
-    if  a[0][1]-a[0][0] > 0.5:
+    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+    print(a[0][1]-a[0][0])
+    print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+    if  a[0][1]-a[0][0] > 0.2:
         print("huangse")
     #return a[0][1]-a[0][0]
     '''
@@ -67,12 +70,16 @@ def Main():
         LoadModel(model,path)
 
 import sys
+
 if __name__ == "__main__":
     '''
     接收第一个参数代表图片的路径
     '''
     path = sys.argv[1]
     model = load_model('plugin/PronDetect(e30b200).h5')
-    download_little_file(path, "tmp.jpg")
-    path = "tmp.jpg"
+    imgfile = "tmp/"+str(random.randint(1000000,10000000))+".jpg"
+    print("+++++++++++++++++++++++",path)
+    download_little_file(path, imgfile)
+    path = imgfile
+    
     LoadModel(model,path)
